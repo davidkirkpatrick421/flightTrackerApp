@@ -107,3 +107,4 @@ junit*.properties
 .env.local
 .env.*.local
 
+Docs/
