@@ -20,6 +20,8 @@ import java.util.List;
 public class OpenSkyService {
 
     private static final Logger logger = LoggerFactory.getLogger(OpenSkyService.class);
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 5000; // 5 seconds
 
     @Value("${opensky.api.url}")
     private String openSkyApiUrl;
@@ -27,42 +29,65 @@ public class OpenSkyService {
     @Autowired
     private FlightStateRepository flightStateRepository;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    @Autowired
+    private RestTemplate restTemplate;
 
     /**
-     * Fetch flight data from OpenSky API and save to database
-     * @return Number of flights saved
+     * Fetch flight data from OpenSky API with retry logic
      */
     public int fetchAndSaveFlights() {
         logger.info("Fetching flight data from OpenSky API...");
 
-        try {
-            // Call OpenSky API
-            OpenSkyResponse response = restTemplate.getForObject(
-                    openSkyApiUrl,
-                    OpenSkyResponse.class
-            );
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                return performFetch();
 
-            if (response == null || response.getStates() == null) {
-                logger.warn("No data received from OpenSky API");
-                return 0;
+            } catch (Exception e) {
+                logger.error("Attempt {}/{} failed: {}", attempt, MAX_RETRIES, e.getMessage());
+
+                if (attempt < MAX_RETRIES) {
+                    logger.info("Retrying in {} seconds...", RETRY_DELAY_MS / 1000);
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return 0;
+                    }
+                }
             }
+        }
 
-            logger.info("Received {} flights from OpenSky API", response.getStates().size());
+        logger.error("All {} attempts failed. Giving up.", MAX_RETRIES);
+        return 0;
+    }
 
-            // Convert to FlightState entities
-            List<FlightState> flightStates = parseFlightData(response);
+    private int performFetch() {
+        // Call OpenSky API
+        OpenSkyResponse response = restTemplate.getForObject(
+                openSkyApiUrl,
+                OpenSkyResponse.class
+        );
 
-            // Save to database
-            flightStateRepository.saveAll(flightStates);
-
-            logger.info("Successfully saved {} flights to database", flightStates.size());
-            return flightStates.size();
-
-        } catch (Exception e) {
-            logger.error("Error fetching flights from OpenSky API", e);
+        if (response == null || response.getStates() == null) {
+            logger.warn("No data received from OpenSky API");
             return 0;
         }
+
+        logger.info("Received {} flights from OpenSky API", response.getStates().size());
+
+        // Convert to FlightState entities
+        List<FlightState> flightStates = parseFlightData(response);
+
+        if (flightStates.isEmpty()) {
+            logger.warn("No valid flights after parsing");
+            return 0;
+        }
+
+        // Save to database
+        flightStateRepository.saveAll(flightStates);
+
+        logger.info("Successfully saved {} flights to database", flightStates.size());
+        return flightStates.size();
     }
 
     /**
@@ -78,7 +103,8 @@ public class OpenSkyService {
                     flightStates.add(flight);
                 }
             } catch (Exception e) {
-                logger.warn("Error parsing flight state: {}", e.getMessage());
+                // Log but don't fail entire batch for one bad record
+                logger.debug("Error parsing flight state: {}", e.getMessage());
             }
         }
 
@@ -87,28 +113,13 @@ public class OpenSkyService {
 
     /**
      * Parse a single flight state array into FlightState object
-     *
-     * OpenSky array format:
-     * [0]  icao24          - string
-     * [1]  callsign        - string
-     * [2]  origin_country  - string
-     * [3]  time_position   - int (unix timestamp)
-     * [4]  last_contact    - int (unix timestamp)
-     * [5]  longitude       - double
-     * [6]  latitude        - double
-     * [7]  baro_altitude   - double (meters)
-     * [8]  on_ground       - boolean
-     * [9]  velocity        - double (m/s)
-     * [10] true_track      - double (heading in degrees)
-     * [11] vertical_rate   - double (m/s)
      */
     private FlightState parseFlightState(List<Object> state) {
-        // Must have at least 12 elements
         if (state.size() < 12) {
             return null;
         }
 
-        // Skip if latitude or longitude is null (aircraft not transmitting position)
+        // Skip if latitude or longitude is null
         if (state.get(5) == null || state.get(6) == null) {
             return null;
         }
@@ -129,7 +140,7 @@ public class OpenSkyService {
         flight.setHeading(getDouble(state.get(10)));
         flight.setVerticalRate(getDouble(state.get(11)));
 
-        // Timestamp - use last_contact (index 4)
+        // Timestamp
         Long lastContact = getLong(state.get(4));
         if (lastContact != null) {
             flight.setTimestamp(
@@ -145,7 +156,7 @@ public class OpenSkyService {
         return flight;
     }
 
-    // Helper methods to safely parse values
+    // Helper methods
 
     private String getString(Object value) {
         return value != null ? value.toString() : null;

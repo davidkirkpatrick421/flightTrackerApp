@@ -2,20 +2,20 @@ package com.david.flight.tracker.repository;
 
 import com.david.flight.tracker.model.entity.FlightState;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface FlightStateRepository extends JpaRepository<FlightState, Long> {
 
     /**
      * Find the latest position for each unique aircraft
-     * This is what you'll use for the real-time map
      */
     @Query("""
         SELECT f FROM FlightState f
@@ -57,5 +57,8 @@ public interface FlightStateRepository extends JpaRepository<FlightState, Long> 
     /**
      * Delete old flight data (cleanup)
      */
-    void deleteByTimestampBefore(LocalDateTime before);
+    @Transactional
+    @Modifying
+    @Query("DELETE FROM FlightState f WHERE f.timestamp < :before")
+    void deleteByTimestampBefore(@Param("before") LocalDateTime before);
 }
