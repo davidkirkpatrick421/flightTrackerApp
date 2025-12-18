@@ -3,6 +3,7 @@ package com.david.flight.tracker.controller;
 import com.david.flight.tracker.model.entity.FlightState;
 import com.david.flight.tracker.repository.FlightStateRepository;
 import com.david.flight.tracker.service.OpenSkyService;
+import com.david.flight.tracker.service.WebSocketService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,10 +22,32 @@ public class TestController {
     @Autowired
     private OpenSkyService openSkyService;
 
+    @Autowired
+    private WebSocketService webSocketService;
+
     @GetMapping("/fetch-flights")
     public String fetchFlights() {
         int count = openSkyService.fetchAndSaveFlights();
-        return "✈️ Fetched and saved " + count + " flights from OpenSky API";
+
+        // Broadcast to WebSocket clients
+        webSocketService.broadcastFlightUpdate(count);
+
+        return "✈️ Fetched and saved " + count + " flights | WebSocket broadcast sent";
+    }
+
+    @GetMapping("/websocket-test")
+    public String testWebSocket() {
+        // Send test notification
+        webSocketService.broadcastNotification("This is a test message", "INFO");
+
+        // Send test statistics
+        long total = flightStateRepository.count();
+        long active = flightStateRepository.countByOnGroundFalseAndTimestampAfter(
+                LocalDateTime.now().minusMinutes(5)
+        );
+        webSocketService.broadcastStatistics(total, active);
+
+        return "🔔 WebSocket test messages sent! Check your WebSocket client.";
     }
 
     @GetMapping("/create")
@@ -62,6 +85,10 @@ public class TestController {
     public String clearDatabase() {
         long count = flightStateRepository.count();
         flightStateRepository.deleteAll();
+
+        // Notify WebSocket clients
+        webSocketService.broadcastNotification("Database cleared", "WARNING");
+
         return "🗑️ Cleared " + count + " flights from database";
     }
 }

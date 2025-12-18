@@ -4,6 +4,7 @@ import com.david.flight.tracker.repository.FlightStateRepository;
 import com.david.flight.tracker.service.OpenSkyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import com.david.flight.tracker.service.WebSocketService;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -19,6 +20,9 @@ public class AdminController {
 
     @Autowired
     private FlightStateRepository flightStateRepository;
+
+    @Autowired
+    private WebSocketService webSocketService;
 
     /**
      * Manually trigger a flight fetch
@@ -111,5 +115,24 @@ public class AdminController {
         response.put("message", "Database cleared completely");
 
         return response;
+    }
+
+    /**
+     * Get WebSocket statistics
+     */
+    @GetMapping("/websocket-stats")
+    public Map<String, Object> websocketStats() {
+        Map<String, Object> stats = new HashMap<>();
+
+        stats.put("messagesSent", webSocketService.getMessagesSent());
+        stats.put("endpoint", "/ws-flights");
+        stats.put("topics", new String[]{
+                "/topic/flight-updates",
+                "/topic/statistics",
+                "/topic/notifications"
+        });
+        stats.put("status", "active");
+
+        return stats;
     }
 }

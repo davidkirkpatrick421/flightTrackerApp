@@ -21,14 +21,15 @@ public class FlightSchedulerService {
     @Autowired
     private FlightStateRepository flightStateRepository;
 
+    @Autowired
+    private WebSocketService webSocketService;  // Add this
+
     private int successfulFetches = 0;
     private int failedFetches = 0;
     private LocalDateTime lastSuccessfulFetch = null;
 
     /**
-     * Fetch flights every 3 minutes (180,000 milliseconds)
-     * OpenSky allows ~400 calls per day = 1 every 3.6 minutes
-     * We use 3 minutes to be safe
+     * Fetch flights every 3 minutes
      */
     @Scheduled(fixedDelay = 180000, initialDelay = 10000)
     public void scheduledFlightFetch() {
@@ -45,14 +46,30 @@ public class FlightSchedulerService {
 
                 logger.info("✅ Fetch successful: {} new flights | Total in DB: {} | Success rate: {}/{}",
                         flightCount, totalFlights, successfulFetches, (successfulFetches + failedFetches));
+
+                // Broadcast to all WebSocket clients
+                webSocketService.broadcastFlightUpdate(flightCount);
+
             } else {
                 failedFetches++;
                 logger.warn("⚠️ Fetch returned 0 flights | Failures: {}", failedFetches);
+
+                // Notify clients of failure
+                webSocketService.broadcastNotification(
+                        "Flight data fetch returned no results",
+                        "WARNING"
+                );
             }
 
         } catch (Exception e) {
             failedFetches++;
             logger.error("❌ Scheduled fetch failed: {} | Failures: {}", e.getMessage(), failedFetches);
+
+            // Notify clients of error
+            webSocketService.broadcastNotification(
+                    "Flight data fetch failed: " + e.getMessage(),
+                    "ERROR"
+            );
         }
 
         logger.info("=== Scheduled flight fetch completed ===");
@@ -60,9 +77,8 @@ public class FlightSchedulerService {
 
     /**
      * Clean up old flight data every hour
-     * Keep only last 24 hours of data
      */
-    @Scheduled(cron = "0 0 * * * *")  // Every hour at minute 0
+    @Scheduled(cron = "0 0 * * * *")
     public void cleanupOldFlights() {
         logger.info("=== Starting cleanup of old flight data ===");
 
@@ -77,15 +93,23 @@ public class FlightSchedulerService {
 
             logger.info("✅ Cleanup complete: Deleted {} old records | Remaining: {}", deleted, countAfter);
 
+            // Notify clients about cleanup
+            if (deleted > 0) {
+                webSocketService.broadcastNotification(
+                        String.format("Cleanup: Removed %d old records", deleted),
+                        "INFO"
+                );
+            }
+
         } catch (Exception e) {
             logger.error("❌ Cleanup failed: {}", e.getMessage());
         }
     }
 
     /**
-     * Log statistics every 10 minutes
+     * Log and broadcast statistics every 10 minutes
      */
-    @Scheduled(fixedDelay = 600000)  // 10 minutes
+    @Scheduled(fixedDelay = 600000)
     public void logStatistics() {
         long totalFlights = flightStateRepository.count();
         LocalDateTime fiveMinAgo = LocalDateTime.now().minusMinutes(5);
@@ -97,5 +121,8 @@ public class FlightSchedulerService {
 
         logger.info("📊 STATS: Total records: {} | Active flights: {} | Last fetch: {} | Success/Fail: {}/{}",
                 totalFlights, activeFlights, lastFetch, successfulFetches, failedFetches);
+
+        // Broadcast statistics to clients
+        webSocketService.broadcastStatistics(totalFlights, activeFlights);
     }
 }
