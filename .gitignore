@@ -1,110 +1,90 @@
-# Compiled class files
+# ===================================
+# SECRETS - Never commit these!
+# ===================================
+**/application-local.properties
+**/application-secrets.properties
+**/.env
+**/.env.local
+*.pem
+*.key
+
+# ===================================
+# BACKEND (Java/Spring Boot)
+# ===================================
+
+# Build output
+**/target/
+**/.gradle/
+**/build/
 *.class
-
-# Log files
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files
 *.jar
 *.war
-*.nar
 *.ear
-*.zip
-*.tar.gz
-*.rar
 
-# Virtual machine crash logs
-hs_err_pid*
-replay_pid*
-
-# Maven
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
-
-# Gradle
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-# IntelliJ IDEA
+# IDE files
 .idea/
-*.iws
 *.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-# Eclipse
-.classpath
+.vscode/
+*.swp
+*.swo
 .project
+.classpath
 .settings/
-bin/
-tmp/
+
+# Maven wrapper (optional - some keep this)
+**/.mvn/
+**/mvnw
+**/mvnw.cmd
+
+# Logs
+*.log
+**/logs/
+
+# ===================================
+# FRONTEND (React) - for later
+# ===================================
+
+# Dependencies
+**/node_modules/
+**/bower_components/
+
+# Build output
+**/build/
+**/dist/
+
+# Frontend environment
+**/frontend/.env.local
+**/frontend/.env.*.local
+
+# ===================================
+# GENERAL
+# ===================================
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+
+# Temp files
 *.tmp
 *.bak
-*.swp
-*~.nib
-local.properties
-.loadpath
-.recommenders
+*~
 
-# NetBeans
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+# Test databases
+*.db
+*.sqlite
 
-# VS Code
-.vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.code-workspace
+# Compressed files
+*.zip
+*.tar
+*.tar.gz
 
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# JUnit test reports
-junit*.properties
-
-# Environment variables
-.env
-.env.local
-.env.*.local
+# IDE generated files
+**/out/
 
 Docs/
