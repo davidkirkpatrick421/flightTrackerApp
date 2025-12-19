@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Repository
 public interface FlightStateRepository extends JpaRepository<FlightState, Long> {
@@ -61,4 +62,13 @@ public interface FlightStateRepository extends JpaRepository<FlightState, Long> 
     @Modifying
     @Query("DELETE FROM FlightState f WHERE f.timestamp < :before")
     void deleteByTimestampBefore(@Param("before") LocalDateTime before);
+
+    /**
+     * Delete recent records for specific aircraft (prevents duplicates)
+     * Only deletes records from the last few minutes
+     */
+    @Transactional
+    @Modifying
+    @Query("DELETE FROM FlightState f WHERE f.icao24 IN :icao24Set AND f.timestamp > :since")
+    int deleteRecentByIcao24Set(@Param("icao24Set") Set<String> icao24Set, @Param("since") LocalDateTime since);
 }

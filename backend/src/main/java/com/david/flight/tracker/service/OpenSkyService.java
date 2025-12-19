@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class OpenSkyService {
@@ -33,7 +35,8 @@ public class OpenSkyService {
     private RestTemplate restTemplate;
 
     /**
-     * Fetch flight data from OpenSky API with retry logic
+     * Fetch flight data from OpenSky API with retry logic and duplicate prevention
+     * @return Number of flights saved
      */
     public int fetchAndSaveFlights() {
         logger.info("Fetching flight data from OpenSky API...");
@@ -61,6 +64,9 @@ public class OpenSkyService {
         return 0;
     }
 
+    /**
+     * Perform the actual fetch and save operation
+     */
     private int performFetch() {
         // Call OpenSky API
         OpenSkyResponse response = restTemplate.getForObject(
@@ -83,11 +89,40 @@ public class OpenSkyService {
             return 0;
         }
 
-        // Save to database
+        // Delete recent duplicates before saving new data
+        // This keeps historical trail data but prevents duplicates in current snapshot
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(5);
+        int deleted = deleteRecentDuplicates(flightStates, cutoff);
+
+        if (deleted > 0) {
+            logger.debug("Removed {} recent duplicate records before inserting new data", deleted);
+        }
+
+        // Save new data
         flightStateRepository.saveAll(flightStates);
 
         logger.info("Successfully saved {} flights to database", flightStates.size());
         return flightStates.size();
+    }
+
+    /**
+     * Delete recent records for the same aircraft to prevent duplicates
+     * Only deletes records from the last 5 minutes for aircraft we're about to update
+     *
+     * @param newFlights List of new flights to be inserted
+     * @param cutoff Only delete records newer than this timestamp
+     * @return Number of records deleted
+     */
+    private int deleteRecentDuplicates(List<FlightState> newFlights, LocalDateTime cutoff) {
+        // Get set of ICAO24 codes we're about to insert
+        Set<String> icao24Set = newFlights.stream()
+                .map(FlightState::getIcao24)
+                .collect(Collectors.toSet());
+
+        // Delete recent records for these specific aircraft
+        int deleted = flightStateRepository.deleteRecentByIcao24Set(icao24Set, cutoff);
+
+        return deleted;
     }
 
     /**
@@ -113,13 +148,28 @@ public class OpenSkyService {
 
     /**
      * Parse a single flight state array into FlightState object
+     *
+     * OpenSky array format:
+     * [0]  icao24          - string
+     * [1]  callsign        - string
+     * [2]  origin_country  - string
+     * [3]  time_position   - int (unix timestamp)
+     * [4]  last_contact    - int (unix timestamp)
+     * [5]  longitude       - double
+     * [6]  latitude        - double
+     * [7]  baro_altitude   - double (meters)
+     * [8]  on_ground       - boolean
+     * [9]  velocity        - double (m/s)
+     * [10] true_track      - double (heading in degrees)
+     * [11] vertical_rate   - double (m/s)
      */
     private FlightState parseFlightState(List<Object> state) {
+        // Must have at least 12 elements
         if (state.size() < 12) {
             return null;
         }
 
-        // Skip if latitude or longitude is null
+        // Skip if latitude or longitude is null (aircraft not transmitting position)
         if (state.get(5) == null || state.get(6) == null) {
             return null;
         }
@@ -140,7 +190,7 @@ public class OpenSkyService {
         flight.setHeading(getDouble(state.get(10)));
         flight.setVerticalRate(getDouble(state.get(11)));
 
-        // Timestamp
+        // Timestamp - use last_contact (index 4)
         Long lastContact = getLong(state.get(4));
         if (lastContact != null) {
             flight.setTimestamp(
@@ -156,7 +206,9 @@ public class OpenSkyService {
         return flight;
     }
 
-    // Helper methods
+    // ===================================================================
+    // HELPER METHODS - Safely parse values from OpenSky API response
+    // ===================================================================
 
     private String getString(Object value) {
         return value != null ? value.toString() : null;

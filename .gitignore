@@ -5,6 +5,13 @@
 **/application-secrets.properties
 **/.env
 **/.env.local
+# Frontend environment variables
+frontend/.env.local
+frontend/.env.*.local
+
+# Frontend build
+frontend/build/
+frontend/node_modules/
 *.pem
 *.key
 
