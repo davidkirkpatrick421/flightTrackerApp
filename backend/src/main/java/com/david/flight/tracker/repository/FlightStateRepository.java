@@ -17,18 +17,47 @@ public interface FlightStateRepository extends JpaRepository<FlightState, Long> 
 
     /**
      * Find the latest position for each unique aircraft
+     * OPTIMIZED VERSION - uses window functions instead of subquery
      */
-    @Query("""
-        SELECT f FROM FlightState f
-        WHERE f.timestamp = (
-            SELECT MAX(f2.timestamp)
-            FROM FlightState f2
-            WHERE f2.icao24 = f.icao24
-        )
-        AND f.timestamp > :since
-        AND f.onGround = false
-        ORDER BY f.timestamp DESC
-        """)
+    @Query(value = """
+    WITH ranked_flights AS (
+        SELECT 
+            id,
+            icao24,
+            callsign,
+            origin_country,
+            timestamp,
+            latitude,
+            longitude,
+            altitude,
+            velocity,
+            heading,
+            vertical_rate,
+            on_ground,
+            created_at,
+            ROW_NUMBER() OVER (PARTITION BY icao24 ORDER BY timestamp DESC) as rn
+        FROM flight_states
+        WHERE timestamp > :since
+        AND on_ground = false
+    )
+    SELECT 
+        id,
+        icao24,
+        callsign,
+        origin_country,
+        timestamp,
+        latitude,
+        longitude,
+        altitude,
+        velocity,
+        heading,
+        vertical_rate,
+        on_ground,
+        created_at
+    FROM ranked_flights
+    WHERE rn = 1
+    ORDER BY timestamp DESC
+    """, nativeQuery = true)
     List<FlightState> findLatestPositions(@Param("since") LocalDateTime since);
 
     /**

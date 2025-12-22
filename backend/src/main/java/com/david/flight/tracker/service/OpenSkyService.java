@@ -89,14 +89,16 @@ public class OpenSkyService {
             return 0;
         }
 
-        // Delete recent duplicates before saving new data
-        // This keeps historical trail data but prevents duplicates in current snapshot
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(5);
-        int deleted = deleteRecentDuplicates(flightStates, cutoff);
+        // Delete ONLY positions with the exact same timestamp (current fetch)
+        // This prevents exact duplicates while keeping historical trail data
+       //  LocalDateTime currentFetchTime = LocalDateTime.now();
+       // LocalDateTime cutoff = currentFetchTime.minusSeconds(30); // Very narrow window
 
-        if (deleted > 0) {
-            logger.debug("Removed {} recent duplicate records before inserting new data", deleted);
-        }
+       // int deleted = deleteRecentDuplicates(flightStates, cutoff);
+
+      //  if (deleted > 0) {
+      //      logger.debug("Removed {} duplicate records from current fetch", deleted);
+      //  }
 
         // Save new data
         flightStateRepository.saveAll(flightStates);
