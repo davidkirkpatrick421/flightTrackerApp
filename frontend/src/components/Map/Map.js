@@ -5,7 +5,7 @@ import './Map.css';
 
 mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN;
 
-function Map({ flights }) {
+function Map({ flights, onFlightClick }) {
     const mapContainer = useRef(null);
     const map = useRef(null);
 
@@ -124,79 +124,17 @@ function Map({ flights }) {
                 );
             });
 
-            // Show popup on individual flight click
+            // Click on individual flight to open sidebar
             map.current.on('click', 'unclustered-point', (e) => {
-                const coordinates = e.features[0].geometry.coordinates.slice();
                 const props = e.features[0].properties;
 
-                const popup = new mapboxgl.Popup()
-                    .setLngLat(coordinates)
-                    .setHTML(`
-            <div style="font-family: 'Inter', sans-serif; color: #f1f5f9; padding: 4px;">
-              <div style="
-                font-family: 'JetBrains Mono', monospace;
-                font-weight: 700;
-                font-size: 14px;
-                color: #fbbf24;
-                margin-bottom: 8px;
-                padding-bottom: 8px;
-                border-bottom: 1px solid #334155;
-                letter-spacing: 1px;
-              ">
-                ${props.callsign || props.icao24}
-              </div>
-              <div style="font-size: 12px; line-height: 1.8;">
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Country</span>
-                  <span>${props.originCountry || 'Unknown'}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Altitude</span>
-                  <span>${props.altitude ? Math.round(props.altitude) + ' m' : 'N/A'}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Speed</span>
-                  <span>${props.velocity ? Math.round(props.velocity * 3.6) + ' km/h' : 'N/A'}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin: 4px 0;">
-                  <span style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Status</span>
-                  <span style="color: ${props.onGround ? '#64748b' : '#10b981'};">
-                    ${props.onGround ? 'On Ground' : 'In Air'}
-                  </span>
-                </div>
-                <button 
-                  id="show-trail-${props.icao24}" 
-                  style="
-                    width: 100%;
-                    margin-top: 8px;
-                    padding: 8px;
-                    background: transparent;
-                    border: 1px solid #fbbf24;
-                    color: #fbbf24;
-                    font-family: 'JetBrains Mono', monospace;
-                    font-size: 10px;
-                    font-weight: 700;
-                    cursor: pointer;
-                    border-radius: 4px;
-                    text-transform: uppercase;
-                  "
-                >
-                  Show Flight Trail
-                </button>
-              </div>
-            </div>
-          `)
-                    .addTo(map.current);
+                // Find full flight object from flights array
+                const clickedFlight = flights.find(f => f.icao24 === props.icao24);
 
-                setTimeout(() => {
-                    const trailButton = document.getElementById(`show-trail-${props.icao24}`);
-                    if (trailButton) {
-                        trailButton.onclick = () => {
-                            showFlightTrail(props.icao24);
-                            popup.remove();
-                        };
-                    }
-                }, 100);
+                if (clickedFlight && onFlightClick) {
+                    console.log('✈️ Flight clicked:', clickedFlight.callsign || clickedFlight.icao24);
+                    onFlightClick(clickedFlight);
+                }
             });
 
             // Cursor changes
@@ -227,7 +165,7 @@ function Map({ flights }) {
             console.log('✅ Trail data:', trail.length, 'positions');
 
             if (trail.length < 2) {
-                alert('Not enough position data to show trail');
+                alert('Flight trail not available yet. Trails show flight history from the last 24 hours. Check back later!');
                 return;
             }
 
@@ -325,7 +263,14 @@ function Map({ flights }) {
             }
         }
 
-    }, [flights]);
+    }, [flights, onFlightClick]);
+
+    // Expose showFlightTrail to parent via callback
+    useEffect(() => {
+        if (window) {
+            window.showFlightTrail = showFlightTrail;
+        }
+    }, []);
 
     return <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />;
 }

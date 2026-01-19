@@ -1,25 +1,29 @@
-import React, {useEffect, useState, useCallback, useMemo} from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Map from './components/Map/Map';
 import SearchBar from './components/SearchBar/SearchBar';
-import {getFlightStats} from './services/api';
-import {useFlights} from './hooks/useFlights';
-import {useWebSocket} from './hooks/useWebSocket';
+import FlightSidebar from './components/FlightSidebar/FlightSidebar';
+import { getFlightStats } from './services/api';
+import { useFlights } from './hooks/useFlights';
+import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
 function App() {
     const [backendConnected, setBackendConnected] = useState(false);
-    const {flights, loading, refetch} = useFlights();
+    const { flights, loading, refetch } = useFlights();
 
     // Search & Filter state
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState('all');
+
+    // Selected flight for sidebar
+    const [selectedFlight, setSelectedFlight] = useState(null);
 
     const handleFlightUpdate = useCallback(() => {
         console.log('🔄 Refetching flights...');
         refetch();
     }, [refetch]);
 
-    const {wsConnected, lastUpdate} = useWebSocket(handleFlightUpdate);
+    const { wsConnected, lastUpdate } = useWebSocket(handleFlightUpdate);
 
     const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0);
 
@@ -46,7 +50,6 @@ function App() {
         return () => clearInterval(interval);
     }, [lastUpdate]);
 
-    // Filter and search flights
     // Filter and search flights
     const filteredFlights = useMemo(() => {
         let result = flights;
@@ -88,7 +91,6 @@ function App() {
                 f.originCountry && asianCountries.includes(f.originCountry)
             );
         }
-        // 'all' shows everything (no filter)
 
         // Apply search
         if (searchQuery) {
@@ -103,9 +105,6 @@ function App() {
 
     const handleSearch = (query) => {
         setSearchQuery(query);
-        if (query && filteredFlights.length === 0) {
-            console.log('⚠️ No flights found matching:', query);
-        }
     };
 
     const handleFilterChange = (filter) => {
@@ -113,7 +112,23 @@ function App() {
         console.log('🔍 Filter changed to:', filter);
     };
 
-    console.log('👉 Flights to render:', filteredFlights.length, filteredFlights);
+    const handleFlightClick = (flight) => {
+        console.log('🎯 handleFlightClick called');
+        console.log('🎯 Flight data:', flight);
+        console.log('🎯 Setting selectedFlight');
+        setSelectedFlight(flight);
+        console.log('🎯 selectedFlight state should update now');
+    };
+
+    const handleCloseSidebar = () => {
+        setSelectedFlight(null);
+    };
+
+    const handleShowTrail = (icao24) => {
+        console.log('🛤️ Show trail for:', icao24);
+        // This will be handled by Map component
+        // You can pass a ref or callback to trigger trail display
+    };
 
     return (
         <div className="App">
@@ -121,9 +136,7 @@ function App() {
                 <div className="logo">FLIGHT TRACKER</div>
 
                 <div className="header-stats">
-  <span className="stat-label">
-    {activeFilter === 'all' ? 'TRACKING' : activeFilter.toUpperCase()}
-  </span>
+                    <span className="stat-label">TRACKING</span>
                     <span className="stat-value">{filteredFlights.length.toLocaleString()}</span>
                     <span className="stat-label">AIRCRAFT</span>
                 </div>
@@ -177,8 +190,17 @@ function App() {
                         </div>
                     </div>
                 )}
-                <Map flights={filteredFlights}/>
+                <Map
+                    flights={filteredFlights}
+                    onFlightClick={handleFlightClick}
+                />
             </main>
+
+            <FlightSidebar
+                flight={selectedFlight}
+                onClose={handleCloseSidebar}
+                onShowTrail={handleShowTrail}
+            />
         </div>
     );
 }
