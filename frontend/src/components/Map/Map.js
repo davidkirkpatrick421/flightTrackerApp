@@ -124,16 +124,17 @@ function Map({ flights, onFlightClick }) {
                 );
             });
 
-            // Click on individual flight to open sidebar
-            map.current.on('click', 'unclustered-point', (e) => {
+            // Show sidebar on individual flight click
+            map.current.on('click', 'unclustered-point', function(e) {
+                console.log('✈️ Plane clicked');
                 const props = e.features[0].properties;
+                console.log('Props:', props);
 
-                // Find full flight object from flights array
-                const clickedFlight = flights.find(f => f.icao24 === props.icao24);
-
-                if (clickedFlight && onFlightClick) {
-                    console.log('✈️ Flight clicked:', clickedFlight.callsign || clickedFlight.icao24);
-                    onFlightClick(clickedFlight);
+                if (onFlightClick) {
+                    // Pass the properties directly - we'll build full object in App.js
+                    onFlightClick(props);
+                } else {
+                    console.log('No onFlightClick callback');
                 }
             });
 
