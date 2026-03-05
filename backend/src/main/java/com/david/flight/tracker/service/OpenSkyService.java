@@ -7,7 +7,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
@@ -15,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,6 +35,18 @@ public class OpenSkyService {
 
     @Value("${opensky.api.url}")
     private String openSkyApiUrl;
+
+    @Value("${opensky.token.url}")
+    private String tokenUrl;
+
+    @Value("${opensky.client.id}")
+    private String clientId;
+
+    @Value("${opensky.client.secret}")
+    private String clientSecret;
+
+    private String cachedToken = null;
+    private Instant tokenExpiry = Instant.MIN;
 
     @Autowired
     private FlightStateRepository flightStateRepository;
@@ -65,14 +85,53 @@ public class OpenSkyService {
     }
 
     /**
+     * Returns a valid Bearer token, refreshing if expired or missing.
+     * Tokens expire after 30 minutes; we refresh 60s early to avoid edge cases.
+     */
+    private String getValidToken() {
+        if (cachedToken == null || Instant.now().isAfter(tokenExpiry.minusSeconds(60))) {
+            refreshToken();
+        }
+        return cachedToken;
+    }
+
+    private void refreshToken() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "client_credentials");
+        body.add("client_id", clientId);
+        body.add("client_secret", clientSecret);
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response = restTemplate.postForObject(tokenUrl, request, Map.class);
+
+        if (response == null || response.get("access_token") == null) {
+            throw new RuntimeException("Failed to obtain access token from OpenSky auth server");
+        }
+
+        cachedToken = (String) response.get("access_token");
+        int expiresIn = ((Number) response.get("expires_in")).intValue();
+        tokenExpiry = Instant.now().plusSeconds(expiresIn);
+        logger.info("OpenSky access token refreshed, expires in {}s", expiresIn);
+    }
+
+    /**
      * Perform the actual fetch and save operation
      */
     private int performFetch() {
-        // Call OpenSky API
-        OpenSkyResponse response = restTemplate.getForObject(
-                openSkyApiUrl,
-                OpenSkyResponse.class
+        // Call OpenSky API with Bearer token
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(getValidToken());
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        ResponseEntity<OpenSkyResponse> responseEntity = restTemplate.exchange(
+                openSkyApiUrl, HttpMethod.GET, requestEntity, OpenSkyResponse.class
         );
+        OpenSkyResponse response = responseEntity.getBody();
 
         if (response == null || response.getStates() == null) {
             logger.warn("No data received from OpenSky API");

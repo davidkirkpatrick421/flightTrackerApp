@@ -5,6 +5,9 @@
 **/application-secrets.properties
 **/.env
 **/.env.local
+**/.env.development
+**/.env.test
+**/.env.production
 # Frontend environment variables
 frontend/.env.local
 frontend/.env.*.local
@@ -68,6 +71,7 @@ frontend/node_modules/
 # ===================================
 
 # OS files
+CLAUDE.md
 .DS_Store
 .DS_Store?
 ._*
